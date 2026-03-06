@@ -1,12 +1,16 @@
-from flask import Flask, render_template, jsonify, request
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import os
+from pathlib import Path
 from dotenv import load_dotenv
-import requests
+import httpx
 import json
 
 load_dotenv()
 
-app = Flask(__name__)
+app = FastAPI()
 
 # ตั้งค่า Recipe Service URL (สำหรับ local development หรือ Docker)
 RECIPE_SERVICE_URL = os.getenv('RECIPE_SERVICE_URL', 'http://localhost:5001')
@@ -14,67 +18,92 @@ RECIPE_SERVICE_URL = os.getenv('RECIPE_SERVICE_URL', 'http://localhost:5001')
 print(f"[INFO] Starting Frontend Service...")
 print(f"[INFO] Recipe Service URL: {RECIPE_SERVICE_URL}")
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+# เพิ่ม CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.route('/user-input')
-def user_input_page():
-    return render_template('userInput.html')
+# ตำแหน่ง templates
+TEMPLATES_DIR = Path(__file__).parent / "templates"
 
-@app.route('/result', methods=['GET', 'POST'])
-def result_page():
-    return render_template('result.html')
+@app.get("/")
+async def index():
+    """หน้าแรก"""
+    return FileResponse(TEMPLATES_DIR / "index.html", media_type="text/html")
 
-@app.route('/api/recommend', methods=['POST'])
-def proxy_recommend():
+@app.get("/user-input")
+async def user_input_page():
+    """หน้ากรอกวัตถุดิบ"""
+    return FileResponse(TEMPLATES_DIR / "userInput.html", media_type="text/html")
+
+@app.get("/result")
+async def result_page():
+    """หน้าแสดงผล"""
+    return FileResponse(TEMPLATES_DIR / "result.html", media_type="text/html")
+
+@app.post("/api/recommend")
+async def proxy_recommend(body: dict):
     """Proxy endpoint ที่ forward request ไป recipe-service"""
     try:
-        data = request.get_json()
-        
         print(f"[INFO] Proxying request to {RECIPE_SERVICE_URL}/api/recommend")
-        print(f"[INFO] Request data: {data}")
+        print(f"[INFO] Request data: {body}")
         
-        # Forward request ไป recipe-service
-        response = requests.post(
-            f'{RECIPE_SERVICE_URL}/api/recommend',
-            json=data,
-            headers={'Content-Type': 'application/json'},
-            timeout=30
-        )
+        # Forward request ไป recipe-service ด้วย httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f'{RECIPE_SERVICE_URL}/api/recommend',
+                json=body,
+                headers={'Content-Type': 'application/json'},
+                timeout=30.0
+            )
         
         print(f"[INFO] Recipe Service Response Status: {response.status_code}")
         
         # Return response จาก recipe-service ไป client
-        return response.json(), response.status_code
+        return JSONResponse(
+            status_code=response.status_code,
+            content=response.json()
+        )
         
-    except requests.exceptions.ConnectionError:
+    except httpx.ConnectError:
         print(f"[ERROR] ไม่สามารถเชื่อมต่อ Recipe Service ที่ {RECIPE_SERVICE_URL}")
-        return jsonify({
-            "error": "ไม่สามารถเชื่อมต่อ Recipe Service",
-            "msg": f"Recipe Service unavailable at {RECIPE_SERVICE_URL}"
-        }), 503
-    except requests.exceptions.Timeout:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "ไม่สามารถเชื่อมต่อ Recipe Service",
+                "msg": f"Recipe Service unavailable at {RECIPE_SERVICE_URL}"
+            }
+        )
+    except httpx.TimeoutException:
         print("[ERROR] Recipe Service request timeout")
-        return jsonify({
-            "error": "Recipe Service timeout",
-            "msg": "Request took too long"
-        }), 504
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "error": "Recipe Service timeout",
+                "msg": "Request took too long"
+            }
+        )
     except Exception as e:
         print(f"[ERROR] Proxy error: {str(e)}")
-        return jsonify({
-            "error": "Proxy error",
-            "msg": str(e)
-        }), 500
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "Proxy error",
+                "msg": str(e)
+            }
+        )
 
-@app.errorhandler(404)
-def not_found(e):
-    return jsonify({"msg": "ไม่รู้จัก Route ที่เรียกใช้นะจ๊ะ", "code": 404}), 404
-
-@app.errorhandler(500)
-def server_error(e):
-    return jsonify({"msg": "Internal Server Error", "code": 500}), 500
+@app.get("/health")
+async def health():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "frontend"}
 
 if __name__ == '__main__':
-    print(f"[INFO] Starting Frontend Service...")
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
+    import uvicorn
+    port = int(os.getenv('PORT', 8000))
+    print(f"[INFO] Starting Frontend Service on port {port}...")
+    uvicorn.run(app, host='0.0.0.0', port=port)
