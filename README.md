@@ -1,0 +1,204 @@
+# IhaveMenu - ระบบแนะนำเมนูอาหารด้วย AI
+
+## สถาปัตยกรรมระบบ (Architecture)
+
+```
+ผู้ใช้ → Vercel (Frontend/FastAPI) → ngrok tunnel → Docker (Recipe Service/Flask) → MongoDB Atlas
+                                                                    ↓
+                                                              Google Gemini AI
+```
+
+| Service | Tech | Hosting | Port |
+|---------|------|---------|------|
+| Frontend | FastAPI | Vercel | - |
+| Recipe Service | Flask + Gemini AI | Docker (local) | 5001 |
+| Database | MongoDB Atlas | Cloud | - |
+| Tunnel | ngrok | local | - |
+
+## GitHub Repositories
+
+| Repo | URL |
+|------|-----|
+| Frontend | https://github.com/nattapongd-coder/ihavemenu-frontend |
+| Backend (Recipe Service) | https://github.com/nattapongd-coder/ihavemenu_backend |
+
+---
+
+## สิ่งที่ต้องเตรียมก่อนเริ่ม (Prerequisites)
+
+1. **Docker Desktop** - ติดตั้งและเปิดให้พร้อม → https://www.docker.com/products/docker-desktop
+2. **ngrok** - สมัครและติดตั้ง → https://ngrok.com
+3. **บัญชี Vercel** - สมัครและเชื่อมต่อ GitHub → https://vercel.com
+4. **MongoDB Atlas** - มี cluster พร้อมข้อมูล recipes 503 รายการ
+5. **Google Gemini API Key** - ขอจาก https://aistudio.google.com/apikey
+
+---
+
+## วิธีรันทั้งระบบ (Step-by-Step)
+
+### ขั้นตอนที่ 1: รัน Recipe Service ด้วย Docker
+
+```bash
+cd microservices
+```
+
+สร้างไฟล์ `recipe-service/.env` (ถ้ายังไม่มี):
+```env
+GEMINI_API_KEY=<your-gemini-api-key>
+MONGO_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/recipe_finder?retryWrites=true&w=majority
+```
+
+รัน Docker:
+```bash
+docker-compose up --build -d
+```
+
+ตรวจสอบว่า recipe-service ทำงาน:
+```bash
+curl http://localhost:5001/health
+```
+ต้องได้: `{"status": "healthy", "service": "recipe-service"}`
+
+### ขั้นตอนที่ 2: เปิด ngrok tunnel
+
+เปิด Terminal ใหม่แล้วรัน:
+```bash
+ngrok http 5001
+```
+
+จะได้ URL เช่น `https://xxxx-xxx-xx-xxx-xx.ngrok-free.app` — **คัดลอก URL นี้ไว้**
+
+### ขั้นตอนที่ 3: ตั้งค่า Environment Variable บน Vercel
+
+1. เข้า https://vercel.com → เลือก project **ihavemenufrontend1**
+2. ไปที่ **Settings → Environment Variables**
+3. ตั้งค่า:
+   - `RECIPE_SERVICE_URL` = `https://xxxx-xxx-xx-xxx-xx.ngrok-free.app` (URL จาก ngrok ขั้นตอนที่ 2)
+4. **Redeploy** project ให้ค่าใหม่มีผล:
+   - ไปที่ **Deployments** → เลือก deployment ล่าสุด → กด **⋯** → **Redeploy**
+
+### ขั้นตอนที่ 4: เปิดใช้งาน
+
+เปิดเบราว์เซอร์ไปที่ URL ของ Vercel เช่น:
+```
+https://ihavemenufrontend1.vercel.app
+```
+
+---
+
+## ⚠️ สิ่งที่ต้องรู้
+
+### ngrok URL เปลี่ยนทุกครั้งที่รีสตาร์ท
+ทุกครั้งที่ปิดแล้วเปิด ngrok ใหม่ URL จะเปลี่ยน → **ต้องกลับไปอัพเดท Environment Variable บน Vercel แล้ว Redeploy ทุกครั้ง**
+
+### Docker ต้องเปิดตลอด
+Recipe Service รันบน Docker ในเครื่อง local → **ถ้าปิด Docker หรือปิดคอม เว็บจะใช้งานไม่ได้**
+
+### MongoDB Atlas IP Whitelist
+ถ้าเปลี่ยน IP (เช่น เปลี่ยน WiFi) → ต้องเพิ่ม IP ใหม่ใน MongoDB Atlas:
+1. เข้า https://cloud.mongodb.com
+2. ไป **Network Access** → **Add IP Address**
+3. เพิ่ม IP ใหม่ หรือเลือก **Allow Access from Anywhere** (0.0.0.0/0)
+
+---
+
+## วิธีหยุดระบบ
+
+```bash
+# หยุด Docker containers
+cd microservices
+docker-compose down
+
+# หยุด ngrok
+# กด Ctrl+C ใน terminal ที่รัน ngrok อยู่
+```
+
+---
+
+## วิธีรันแบบ Local ทั้งหมด (ไม่ใช้ Vercel)
+
+ถ้าต้องการรันทั้ง Frontend + Backend บนเครื่องตัวเอง:
+
+```bash
+cd microservices
+docker-compose up --build
+```
+
+เปิด http://localhost:5000
+
+---
+
+## โครงสร้างไฟล์
+
+```
+microservices/
+├── frontend/                  # Frontend Service (FastAPI)
+│   ├── app.py                 # FastAPI app + proxy ไป recipe-service
+│   ├── requirements.txt       # fastapi, uvicorn, httpx, python-dotenv
+│   ├── vercel.json            # Vercel deployment config
+│   └── templates/
+│       ├── index.html         # หน้าแรก
+│       ├── userInput.html     # หน้ากรอกวัตถุดิบ
+│       └── result.html        # หน้าแสดงผลเมนู
+├── recipe-service/            # Recipe Service (Flask + Gemini AI)
+│   ├── app.py                 # Flask app + Google Gemini AI
+│   ├── Dockerfile             # Docker build config
+│   ├── requirements.txt       # flask, google-genai, pymongo, etc.
+│   └── .env                   # API keys (ไม่ push ขึ้น GitHub)
+├── docker-compose.yml         # Docker compose config
+├── start.bat                  # รัน local แบบไม่ใช้ Docker
+└── stop.bat                   # หยุด local services
+```
+
+## ทดสอบ API
+
+### Recipe Service Health Check
+```bash
+curl http://localhost:5001/health
+```
+
+### ทดสอบแนะนำเมนู
+```bash
+curl -X POST http://localhost:5001/api/recommend \
+  -H "Content-Type: application/json" \
+  -d "{\"ingredients\":\"กุ้ง, ไข่\",\"food_type\":\"stir-fried\",\"time_limit\":30}"
+```
+
+## ข้อดีของ Microservices
+
+✅ **แยกส่วนชัดเจน** - แต่ละ service ทำหน้าที่เฉพาะ
+✅ **Scale ได้อิสระ** - เพิ่ม Recipe Service ได้ถ้าคนใช้เยอะ
+✅ **Deploy แยกได้** - แก้ Frontend ไม่กระทบ Recipe Service
+✅ **Fault Isolation** - ถ้า service หนึ่งล่ม ไม่กระทบทั้งระบบ
+
+## เปรียบเทียบ Monolith vs Microservices
+
+| | Monolith | Microservices |
+|---|---|---|
+| **โครงสร้าง** | ทุกอย่างใน app.py เดียว | แยก Frontend + Recipe Service |
+| **Deploy** | Deploy ทั้งหมดพร้อมกัน | Deploy แยกได้ |
+| **Scale** | Scale ทั้งระบบ | Scale แต่ละ service |
+| **ความซับซ้อน** | ง่าย | ซับซ้อนกว่า |
+| **เหมาะกับ** | โปรเจกต์เล็ก | โปรเจกต์ใหญ่ |
+
+## API Endpoints
+
+### Recipe Service (Port 5001)
+- `GET /health` - Health check
+- `POST /api/recommend` - แนะนำเมนูอาหาร
+
+### Frontend Service (Port 5000)
+- `GET /` - หน้าแรก
+- `GET /user-input` - หน้ากรอกวัตถุดิบ
+- `GET /result` - หน้าผลลัพธ์
+- `POST /recommend` - Proxy ไปยัง Recipe Service
+
+## Troubleshooting
+
+### ปัญหา: Cannot connect to recipe service
+- ตรวจสอบว่า Recipe Service รันอยู่ที่ Port 5001
+- ตรวจสอบ RECIPE_SERVICE_URL ใน frontend/.env
+
+### ปัญหา: MongoDB connection error
+- ตรวจสอบว่า MongoDB รันอยู่ที่ Port 27017
+- ตรวจสอบ MONGO_URI ใน recipe-service/.env

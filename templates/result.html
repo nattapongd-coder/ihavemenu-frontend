@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เมนูแนะนำ - IhaveMenu</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Kanit', sans-serif; }
+        .bg-food {
+            background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.6)), 
+                              url('https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1920&q=80');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+    </style>
+</head>
+<body class="bg-food min-h-screen py-6 px-4">
+    <div class="max-w-7xl mx-auto">
+        <div class="flex justify-between items-center mb-6">
+            <a href="/user-input" class="text-white hover:text-yellow-400 transition">
+                <span class="text-xl">←</span> ค้นหาใหม่
+            </a>
+            <h1 class="text-3xl font-bold text-yellow-400">🍽️ เมนูแนะนำ</h1>
+            <a href="/user-input" class="bg-yellow-400 hover:bg-yellow-500 text-white font-bold px-5 py-2 rounded-full">
+                🔄 ลองอีกครั้ง
+            </a>
+        </div>
+        
+        <div id="recipes" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
+    </div>
+
+    <script>
+        // รับข้อมูลจาก sessionStorage
+        const recipesData = sessionStorage.getItem('recipesData');
+        
+        if (recipesData) {
+            try {
+                const data = JSON.parse(recipesData);
+                const recipes = data.recipes || [data];
+                const recipesContainer = document.getElementById('recipes');
+                
+                recipes.forEach((recipe, index) => {
+                    const medals = ['🥇', '🥈', '🥉', '🏅', '🏅', '⭐'];
+                    const steps = recipe.instruction.split(/\d+\.\s*/).filter(s => s.trim());
+                    const stepsHTML = steps.map((step, i) => `
+                        <div class="flex gap-2 items-start mb-2">
+                            <div class="bg-yellow-400 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold flex-shrink-0">${i + 1}</div>
+                            <p class="text-gray-700 text-sm">${step.trim()}</p>
+                        </div>
+                    `).join('');
+                    
+                    recipesContainer.innerHTML += `
+                        <div class="bg-white/95 rounded-2xl shadow-xl overflow-hidden">
+                            ${recipe.image_url ? `
+                                <div class="relative">
+                                    <img src="${recipe.image_url}" alt="${recipe.recipe_name}" class="w-full h-48 object-cover">
+                                    <div class="absolute top-3 left-3 bg-white/95 px-3 py-1.5 rounded-full shadow-lg">
+                                        <span class="text-xl">${medals[index]}</span>
+                                        <span class="font-bold text-gray-800 ml-1 text-sm">อันดับ ${index + 1}</span>
+                                    </div>
+                                </div>
+                            ` : ''}
+                            <div class="p-4">
+                                <h2 class="text-xl font-bold text-gray-800 mb-3">
+                                    ${!recipe.image_url ? medals[index] + ' ' : ''}${recipe.recipe_name}
+                                </h2>
+                                
+                                <div class="mb-3">
+                                    <h3 class="text-base font-bold text-orange-600 mb-2">👩‍🍳 วิธีทำ</h3>
+                                    <div class="bg-orange-50 rounded-xl p-3">
+                                        ${stepsHTML || `<p class="text-gray-700 text-sm">${recipe.instruction}</p>`}
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-gradient-to-r from-yellow-100 to-orange-100 rounded-xl p-3">
+                                    <h3 class="text-sm font-bold text-gray-800 mb-2">💪 คุณค่าทางโภชนาการ</h3>
+                                    <div class="flex gap-4 text-gray-700 font-semibold text-sm">
+                                        <span>🔥 ${recipe.nutrition[0].calories} kcal</span>
+                                        <span>🥩 ${recipe.nutrition[0].protein} g</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                sessionStorage.removeItem('recipesData');
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('recipes').innerHTML = `
+                    <div class="col-span-full bg-white/95 rounded-2xl p-6 text-center">
+                        <p class="text-red-600 text-lg font-semibold">เกิดข้อผิดพลาด</p>
+                        <p class="text-gray-600 mt-2">กรุณาลองใหม่อีกครั้ง</p>
+                    </div>
+                `;
+            }
+        } else {
+            document.getElementById('recipes').innerHTML = `
+                <div class="col-span-full bg-white/95 rounded-2xl p-6 text-center">
+                    <p class="text-yellow-600 text-lg font-semibold">ไม่พบข้อมูล</p>
+                    <p class="text-gray-600 mt-2">กรุณากลับไปกรอกข้อมูลใหม่</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
