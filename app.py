@@ -63,7 +63,7 @@ async def proxy_recommend(body: dict):
                 f'{RECIPE_SERVICE_URL}/api/recommend',
                 json=body,
                 headers={'Content-Type': 'application/json'},
-                timeout=30.0
+                timeout=60.0
             )
         
         print(f"[INFO] Recipe Service Response Status: {response.status_code}")
