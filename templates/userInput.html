@@ -15,6 +15,10 @@
             background-position: center;
             background-attachment: fixed;
         }
+
+        @supports (-webkit-touch-callout: none) {
+            .bg-food { background-attachment: scroll; }
+        }
     </style>
 </head>
 <body class="bg-food min-h-screen">
@@ -26,13 +30,13 @@
             </a>
             
             <div class="text-center mb-8">
-                <h1 class="text-5xl md:text-6xl font-bold text-yellow-400 mb-4 drop-shadow-lg">
+                <h1 class="text-3xl sm:text-5xl md:text-6xl font-bold text-yellow-400 mb-4 drop-shadow-lg">
                     🍳 กรอกวัตถุดิบ
                 </h1>
-                <p class="text-xl text-white/90">บอกวัตถุดิบที่มี เราจะแนะนำเมนูให้</p>
+                <p class="text-base sm:text-xl text-white/90">บอกวัตถุดิบที่มี เราจะแนะนำเมนูให้</p>
             </div>
             
-            <div class="bg-white/95 backdrop-blur rounded-3xl shadow-2xl p-8 md:p-10">
+            <div class="bg-white/95 backdrop-blur rounded-3xl shadow-2xl p-5 sm:p-8 md:p-10">
                 <form id="menuForm" class="space-y-8">
                     <div>
                         <label class="block text-gray-800 font-bold mb-4 text-xl flex items-center gap-2">
@@ -49,8 +53,8 @@
                                             class="px-3 py-4 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-yellow-500 focus:border-transparent transition text-lg">
                                         <option value="กรัม">กรัม</option>
                                         <option value="ฟอง">ฟอง</option>
-                                        <option value="ช้อนโต๊ะ">ช้อนโต๊ะ</option>
-                                        <option value="ถ้วย">ถ้วย</option>
+                                        <option value="หัว">หัว</option>
+                                        <option value="ต้น">ต้น</option>
                                         <option value="กิโลกรัม">กิโลกรัม</option>
                                     </select>
                                     <button type="button" id="addIngredient"
@@ -95,7 +99,7 @@
                 
                 <div id="loading" class="hidden text-center mt-8">
                     <div class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-yellow-200 border-t-yellow-500"></div>
-                    <p class="text-gray-700 text-xl font-semibold mt-4">กำลังค้นหาเมนูที่เหลือเหมาะ... 🔍</p>
+                    <p class="text-gray-700 text-xl font-semibold mt-4">กำลังค้นหาเมนูที่เหมาะสมกับคุณ🔍</p>
                 </div>
             </div>
         </div>
@@ -162,20 +166,34 @@
             document.getElementById('loading').classList.remove('hidden');
             
             try {
-                // ดึง URL ของ Recipe Service จาก config (เร็ว ไม่ timeout)
+                // ดึง URL ของ Recipe Service จาก config
                 const configRes = await fetch('/api/config');
                 const config = await configRes.json();
                 const backendUrl = config.recipe_service_url;
 
-                // เรียก Recipe Service ตรง (ไม่ผ่าน Vercel proxy → ไม่มี 10s timeout)
-                const response = await fetch(`${backendUrl}/api/recommend`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'ngrok-skip-browser-warning': 'true'
-                    },
-                    body: JSON.stringify({ ingredients, food_type: foodType, time_limit: timeLimit })
-                });
+                // ถ้ารัน local (Docker/localhost) → ใช้ proxy ผ่าน frontend server
+                // ถ้ารัน Vercel (ngrok URL) → เรียก backend ตรงเพื่อเลี่ยง 10s timeout
+                const isBrowserAccessible = backendUrl.startsWith('https://');
+                let response;
+
+                if (isBrowserAccessible) {
+                    // Vercel mode: เรียก ngrok ตรงจาก browser
+                    response = await fetch(`${backendUrl}/api/recommend`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'ngrok-skip-browser-warning': 'true'
+                        },
+                        body: JSON.stringify({ ingredients, food_type: foodType, time_limit: timeLimit })
+                    });
+                } else {
+                    // Local mode: ใช้ proxy ผ่าน frontend server
+                    response = await fetch('/api/recommend', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ingredients, food_type: foodType, time_limit: timeLimit })
+                    });
+                }
                 
                 const data = await response.json();
                 

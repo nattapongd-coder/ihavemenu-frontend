@@ -17,6 +17,10 @@
             background-attachment: fixed;
         }
 
+        @supports (-webkit-touch-callout: none) {
+            .bg-food { background-attachment: scroll; }
+        }
+
         /* ปรับขนาด Fluid Typography ให้เล็กลงและดูพอดีขึ้น */
         .fluid-h1 {
             font-size: clamp(2.2rem, 8vw, 4.5rem); /* ลดจากเดิมที่สูงสุด 8rem เหลือ 4.5rem */
